@@ -26,6 +26,36 @@ from .easunpy.async_isolar import AsyncISolar
 
 _LOGGER = logging.getLogger(__name__)
 
+SENSOR_ICONS: dict[str, str] = {
+    "battery_voltage":          "mdi:battery",
+    "battery_current":          "mdi:current-dc",
+    "battery_power":            "mdi:battery-charging",
+    "battery_soc":              "mdi:battery-medium",
+    "battery_temperature":      "mdi:thermometer",
+    "pv_total_power":           "mdi:solar-power",
+    "pv_charging_power":        "mdi:solar-power-variant",
+    "pv_charging_current":      "mdi:current-dc",
+    "pv1_voltage":              "mdi:solar-panel",
+    "pv1_current":              "mdi:current-dc",
+    "pv1_power":                "mdi:solar-panel",
+    "pv2_voltage":              "mdi:solar-panel",
+    "pv2_current":              "mdi:current-dc",
+    "pv2_power":                "mdi:solar-panel",
+    "pv_generated_today":       "mdi:solar-power",
+    "pv_generated_total":       "mdi:counter",
+    "grid_voltage":             "mdi:transmission-tower",
+    "grid_power":               "mdi:transmission-tower",
+    "grid_frequency":           "mdi:sine-wave",
+    "output_voltage":           "mdi:power-plug",
+    "output_current":           "mdi:current-ac",
+    "output_power":             "mdi:power-plug",
+    "output_apparent_power":    "mdi:power-plug",
+    "output_load_percentage":   "mdi:gauge",
+    "output_frequency":         "mdi:sine-wave",
+    "operating_mode":           "mdi:information-outline",
+    "inverter_time":            "mdi:clock-outline",
+}
+
 DIAGNOSTIC_SENSORS = {
     "battery_voltage", "battery_current", "battery_temperature",
     "pv_charging_power", "pv_charging_current",
@@ -208,6 +238,11 @@ class EasunSensor(SensorEntity):
         return None
 
     @property
+    def icon(self) -> str | None:
+        """Return the icon for the sensor."""
+        return SENSOR_ICONS.get(self._id)
+
+    @property
     def should_poll(self) -> bool:
         """Return False as entity should not be polled individually."""
         return False
@@ -216,14 +251,14 @@ class EasunSensor(SensorEntity):
     def name(self):
         """Return the name of the sensor."""
         if self._entry_id:
-            return f"Easun {self._name} ({self._entry_id[:8]})"
+            return f"Easun {self._entry_id[:8]} {self._name}"
         return f"Easun {self._name}"
 
     @property
     def unique_id(self):
         """Return a unique ID."""
         if self._entry_id:
-            return f"easun_inverter_{self._id}_{self._entry_id}"
+            return f"easun_inverter_{self._entry_id[:8]}_{self._id}"
         return f"easun_inverter_{self._id}"
 
     @property

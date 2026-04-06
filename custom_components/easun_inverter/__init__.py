@@ -1,10 +1,13 @@
 """The Easun ISolar Inverter integration."""
 from __future__ import annotations
 
+from pathlib import Path
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 import homeassistant.helpers.config_validation as cv
+from homeassistant.helpers.storage import Store
 import logging
 
 _LOGGER = logging.getLogger(__name__)
@@ -44,6 +47,60 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     _LOGGER.debug("Setting up Easun ISolar Inverter component")
     return True
 
+async def _ensure_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Create a per-inverter Lovelace dashboard on first install."""
+    import yaml
+
+    device_id = entry.entry_id[:8]
+    url_path = f"easun_{device_id}"
+
+    dashboard_path = Path(__file__).parent / "dashboard.yaml"
+    try:
+        raw = await hass.async_add_executor_job(dashboard_path.read_text)
+    except Exception as e:
+        _LOGGER.warning(f"Could not read dashboard.yaml: {e}")
+        return
+
+    # Template entity IDs for this specific inverter
+    raw = raw.replace("sensor.easun_", f"sensor.easun_{device_id}_")
+    try:
+        config = yaml.safe_load(raw)
+    except Exception as e:
+        _LOGGER.warning(f"Could not parse dashboard.yaml: {e}")
+        return
+
+    # Write dashboard config (idempotent)
+    config_store = Store(hass, 1, f"lovelace.{url_path}")
+    if await config_store.async_load() is None:
+        await config_store.async_save({"config": config})
+        _LOGGER.info(f"Created Lovelace dashboard: {url_path}")
+
+    # Register dashboard in sidebar (idempotent)
+    registry_store = Store(hass, 1, "core.lovelace_dashboards")
+    registry = await registry_store.async_load() or {}
+    items = registry.get("items", [])
+    if not any(d.get("url_path") == url_path for d in items):
+        items.append({
+            "id": url_path,
+            "url_path": url_path,
+            "title": f"Easun Inverter ({device_id})",
+            "icon": "mdi:solar-power",
+            "show_in_sidebar": True,
+            "require_admin": False,
+            "mode": "storage",
+        })
+        registry["items"] = items
+        await registry_store.async_save(registry)
+        _LOGGER.info(f"Registered dashboard in sidebar: {url_path}")
+
+        hass.components.persistent_notification.async_create(
+            f"Dashboard **Easun Inverter ({device_id})** has been added to your sidebar. "
+            "Reload the browser to see it.",
+            title="Easun Inverter Dashboard Installed",
+            notification_id=f"easun_inverter_dashboard_{device_id}",
+        )
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Easun ISolar Inverter from a config entry."""
     if entry.version < 4:
@@ -52,13 +109,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     model = entry.data["model"]  # No default - should be required
     _LOGGER.warning(f"Setting up inverter with model: {model}, config data: {entry.data}")
-    
+
     # Initialize domain data
     hass.data.setdefault(DOMAIN, {})
-    
+
     # Forward the setup to the sensor platform
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    
+
+    # Install Lovelace dashboard on first setup
+    await _ensure_dashboard(hass, entry)
+
     return True
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
