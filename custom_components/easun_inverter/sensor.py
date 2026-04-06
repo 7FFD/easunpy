@@ -18,18 +18,30 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.const import EntityCategory
 
 from . import DOMAIN  # Import DOMAIN from __init__.py
-from easunpy.async_isolar import AsyncISolar
+from .easunpy.async_isolar import AsyncISolar
 
 _LOGGER = logging.getLogger(__name__)
 
+DIAGNOSTIC_SENSORS = {
+    "battery_voltage", "battery_current", "battery_temperature",
+    "pv_charging_power", "pv_charging_current",
+    "pv1_voltage", "pv1_current", "pv1_power",
+    "pv2_voltage", "pv2_current", "pv2_power",
+    "grid_voltage", "grid_frequency",
+    "output_voltage", "output_current", "output_apparent_power", "output_frequency",
+    "operating_mode", "inverter_time",
+}
 
 class DataCollector:
     """Centralized data collector for Easun Inverter."""
 
-    def __init__(self, isolar):
+    def __init__(self, isolar, inverter_ip: str):
         self._isolar = isolar
+        self._inverter_ip = inverter_ip
         self._data = {}
         self._lock = asyncio.Lock()
         self._consecutive_failures = 0
@@ -189,6 +201,13 @@ class EasunSensor(SensorEntity):
         return self._available
 
     @property
+    def entity_category(self):
+        """Return diagnostic category for technical sensors."""
+        if self._id in DIAGNOSTIC_SENSORS:
+            return EntityCategory.DIAGNOSTIC
+        return None
+
+    @property
     def should_poll(self) -> bool:
         """Return False as entity should not be polled individually."""
         return False
@@ -204,7 +223,7 @@ class EasunSensor(SensorEntity):
     def unique_id(self):
         """Return a unique ID."""
         if self._entry_id:
-            return f"easun_inverter_{self._entry_id}_{self._id}"
+            return f"easun_inverter_{self._id}_{self._entry_id}"
         return f"easun_inverter_{self._id}"
 
     @property
@@ -216,6 +235,16 @@ class EasunSensor(SensorEntity):
     def unit_of_measurement(self):
         """Return the unit of measurement."""
         return self._unit
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info to group all sensors under one device."""
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._entry_id)},
+            name=f"Easun Inverter ({self._data_collector._inverter_ip})",
+            manufacturer="Easun",
+            model=self._data_collector._isolar.model,
+        )
 
 
 async def async_setup_entry(
@@ -242,7 +271,7 @@ async def async_setup_entry(
         return
     
     isolar = AsyncISolar(inverter_ip=inverter_ip, local_ip=local_ip, model=model)
-    data_collector = DataCollector(isolar)
+    data_collector = DataCollector(isolar, inverter_ip)
     
     # Store the coordinator in the domain data under this entry's ID
     hass.data.setdefault(DOMAIN, {})

@@ -3,7 +3,7 @@ import struct
 import time
 import logging  # Import logging
 
-from easunpy.crc import crc16_modbus
+from .crc import crc16_modbus
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
