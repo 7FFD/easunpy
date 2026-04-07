@@ -69,13 +69,13 @@ async def _ensure_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> None:
         _LOGGER.warning(f"Could not parse dashboard.yaml: {e}")
         return
 
-    # Write dashboard config (idempotent)
+    # Write dashboard config to lovelace storage (idempotent)
     config_store = Store(hass, 1, f"lovelace.{url_path}")
     if await config_store.async_load() is None:
         await config_store.async_save({"config": config})
-        _LOGGER.info(f"Created Lovelace dashboard: {url_path}")
+        _LOGGER.info(f"Created Lovelace dashboard config: {url_path}")
 
-    # Register dashboard in sidebar (idempotent)
+    # Register dashboard in the dashboards registry (idempotent)
     registry_store = Store(hass, 1, "core.lovelace_dashboards")
     registry = await registry_store.async_load() or {}
     items = registry.get("items", [])
@@ -94,8 +94,8 @@ async def _ensure_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> None:
         _LOGGER.info(f"Registered dashboard in sidebar: {url_path}")
 
         hass.components.persistent_notification.async_create(
-            f"Dashboard **Easun Inverter ({device_id})** has been added to your sidebar. "
-            "Reload the browser to see it.",
+            f"Dashboard **Easun Inverter ({device_id})** has been added. "
+            "**Restart Home Assistant** to see it in the sidebar.",
             title="Easun Inverter Dashboard Installed",
             notification_id=f"easun_inverter_dashboard_{device_id}",
         )
